@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import ci  # noqa: E402
+import ci
 
 
 def proj(path, depends_on=()):

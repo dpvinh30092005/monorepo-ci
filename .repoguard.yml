@@ -1,5 +1,19 @@
 # Policy for repoguard (https://github.com/dpvinh30092005/repoguard).
 ci:
+  # Declared explicitly so the shared Python library is installed from source.
+  projects:
+    - path: libs/py-common
+      type: python
+    - path: projects/worker-python
+      type: python
+      commands:
+        install: python -m pip install -e ../../libs/py-common -e ".[dev]"
+    - path: projects/api-node
+      type: node
+    - path: projects/service-go
+      type: go
+    - path: ci
+      type: python
   postman:
     # Start the API, wait until it answers, then run the Postman collections against it.
     start: node projects/api-node/src/server.js

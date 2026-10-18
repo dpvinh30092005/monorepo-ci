@@ -201,7 +201,7 @@ def changed_files(base: str | None, head: str = "HEAD", root: Path = ROOT) -> li
         return None
     proc = subprocess.run(
         ["git", "diff", "--name-only", f"{base}...{head}"],
-        cwd=root, capture_output=True, text=True,
+        cwd=root, capture_output=True, text=True, check=False,  # failure handled below
     )
     if proc.returncode != 0:
         # e.g. force-push removed `before`, or shallow clone. Fail safe: build everything.
@@ -322,7 +322,7 @@ def run_project(p: Project, stages: list[str]) -> bool:
             continue
         print(f"\n> [{p.name}] {stage}: {cmd}", flush=True)
         started = time.monotonic()
-        rc = subprocess.run(["bash", "-eo", "pipefail", "-c", cmd], cwd=cwd).returncode
+        rc = subprocess.run(["bash", "-eo", "pipefail", "-c", cmd], cwd=cwd, check=False).returncode
         took = time.monotonic() - started
         if rc != 0:
             print(f"x [{p.name}] {stage} FAILED (exit {rc}, {took:.1f}s)", flush=True)
