@@ -1,0 +1,40 @@
+{
+  "info": {
+    "name": "api-node",
+    "description": "Contract tests for projects/api-node. Run by `repoguard ci` with Newman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "GET /health",
+      "request": { "method": "GET", "url": "{{baseUrl}}/health" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('status is 200', () => pm.response.to.have.status(200));",
+        "pm.test('reports ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+      ]}}]
+    },
+    {
+      "name": "GET /sum adds numbers",
+      "request": { "method": "GET", "url": "{{baseUrl}}/sum?n=1,2,39" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('status is 200', () => pm.response.to.have.status(200));",
+        "pm.test('result is 42', () => pm.expect(pm.response.json().result).to.eql(42));"
+      ]}}]
+    },
+    {
+      "name": "GET /sum rejects bad input",
+      "request": { "method": "GET", "url": "{{baseUrl}}/sum?n=1,x" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('status is 400', () => pm.response.to.have.status(400));",
+        "pm.test('explains the error', () => pm.expect(pm.response.json().error).to.include('numbers'));"
+      ]}}]
+    },
+    {
+      "name": "Unknown route is 404",
+      "request": { "method": "GET", "url": "{{baseUrl}}/nope" },
+      "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+        "pm.test('status is 404', () => pm.response.to.have.status(404));"
+      ]}}]
+    }
+  ]
+}

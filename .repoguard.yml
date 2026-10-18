@@ -1,0 +1,7 @@
+# Policy for repoguard (https://github.com/dpvinh30092005/repoguard).
+ci:
+  postman:
+    # Start the API, wait until it answers, then run the Postman collections against it.
+    start: node projects/api-node/src/server.js
+    wait_url: http://127.0.0.1:3000/health
+    environment: projects/api-node/postman/local.postman_environment.json
