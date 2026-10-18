@@ -1,0 +1,123 @@
+# Entry point for every push / PR.
+#
+#   plan ──► project (matrix, one reusable pipeline per affected project) ──┐
+#   meta (validate the CI tooling itself) ──────────────────────────────────┼─► CI OK
+#
+# Branch protection should require only the "CI OK" check: project jobs are
+# dynamic (their names change with what was touched), the gate is stable.
+name: CI
+
+on:
+  push:
+    branches: [main, "release/**"]
+  pull_request:
+  merge_group:
+  schedule:
+    - cron: "0 19 * * *" # nightly full build (02:00 ICT) catches drift in deps/base images
+  workflow_dispatch: # manual run = full build
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  # Superseded PR runs are cancelled; runs on main always finish.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      count: ${{ steps.detect.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need history to diff against the base
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ci/requirements.txt
+
+      - run: pip install -r ci/requirements.txt
+
+      - name: Detect affected projects
+        id: detect
+        env:
+          # PR / merge queue: diff against the target branch. Push: against the previous tip.
+          # schedule / dispatch have no base => the script selects every project.
+          BASE: >-
+            ${{ github.event.pull_request.base.sha
+             || github.event.merge_group.base_sha
+             || (github.event_name == 'push' && github.event.before)
+             || '' }}
+        run: python ci/ci.py detect --base "$BASE" --head "$GITHUB_SHA"
+
+  meta:
+    name: CI tooling
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ci/requirements.txt
+
+      - run: pip install -r ci/requirements.txt
+
+      - name: Validate project manifests
+        run: python ci/ci.py validate
+
+      - name: Unit-test the change detector
+        run: python -m unittest discover -s ci/tests -v
+
+      - name: Lint workflows (actionlint)
+        run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color
+
+  project:
+    name: ${{ matrix.project.name }}
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    strategy:
+      fail-fast: false # one broken project must not hide the state of the others
+      max-parallel: 20
+      matrix:
+        project: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    permissions:
+      contents: read
+      packages: write # push images to GHCR (only used on main)
+    uses: ./.github/workflows/_project.yml
+    with:
+      name: ${{ matrix.project.name }}
+      path: ${{ matrix.project.path }}
+      type: ${{ matrix.project.type }}
+      version: ${{ matrix.project.version }}
+      commands: ${{ toJSON(matrix.project.commands) }}
+      docker: ${{ matrix.project.docker }}
+      push-image: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    secrets: inherit
+
+  gate:
+    name: CI OK
+    if: always()
+    needs: [plan, meta, project]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check results
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          # "skipped" is fine (e.g. a docs-only PR selects no project).
+          if echo "$NEEDS" | jq -e 'any(.[]; .result == "failure" or .result == "cancelled")' > /dev/null; then
+            echo "::error::At least one required job failed or was cancelled"
+            exit 1
+          fi

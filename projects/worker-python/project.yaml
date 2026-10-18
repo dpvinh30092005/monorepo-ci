@@ -1,0 +1,8 @@
+type: python
+version: "3.12"
+# A change in libs/py-common re-runs this project's pipeline too.
+depends_on:
+  - libs/py-common
+commands:
+  # Install the local library from source so CI tests against HEAD, not a published version.
+  install: python -m pip install -e ../../libs/py-common -e ".[dev]"

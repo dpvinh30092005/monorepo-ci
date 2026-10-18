@@ -1,0 +1,27 @@
+# Globs in `directories` mean new projects are picked up automatically.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
+
+  - package-ecosystem: npm
+    directories: ["/projects/*", "/libs/*"]
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: pip
+    directories: ["/projects/*", "/libs/*", "/ci"]
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: gomod
+    directories: ["/projects/*", "/libs/*"]
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: docker
+    directories: ["/projects/*"]
+    schedule: { interval: weekly }

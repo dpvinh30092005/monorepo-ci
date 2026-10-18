@@ -1,0 +1,9 @@
+# Replace the teams below with real GitHub users/teams.
+# The pipeline is shared infrastructure: changes to it rebuild every project.
+/.github/          @your-org/platform
+/ci/               @your-org/platform
+
+/projects/api-node/       @your-org/team-web
+/projects/service-go/     @your-org/team-core
+/projects/worker-python/  @your-org/team-data
+/libs/py-common/          @your-org/team-data

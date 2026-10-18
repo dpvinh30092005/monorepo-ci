@@ -1,0 +1,127 @@
+# Reusable pipeline for ONE project. Called by ci.yml once per affected project.
+# Everything it needs was resolved by `ci/ci.py detect`, so this file has no
+# language-specific logic except the toolchain setup.
+name: Project pipeline
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        type: string
+        required: true
+      path:
+        type: string
+        required: true
+      type:
+        description: node | python | go | custom
+        type: string
+        required: true
+      version:
+        description: toolchain version ("" = toolchain default / version file)
+        type: string
+        default: ""
+      commands:
+        description: JSON object {install, lint, build, test}; "" disables a stage
+        type: string
+        required: true
+      docker:
+        type: boolean
+        default: false
+      push-image:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build & test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.path }}
+    env:
+      CMD_INSTALL: ${{ fromJSON(inputs.commands).install }}
+      CMD_LINT: ${{ fromJSON(inputs.commands).lint }}
+      CMD_BUILD: ${{ fromJSON(inputs.commands).build }}
+      CMD_TEST: ${{ fromJSON(inputs.commands).test }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-toolchain
+        with:
+          type: ${{ inputs.type }}
+          version: ${{ inputs.version }}
+          path: ${{ inputs.path }}
+
+      - run: mkdir -p reports
+
+      # Commands come from env, never interpolated into the script (no injection).
+      - name: Install
+        if: env.CMD_INSTALL != ''
+        run: eval "$CMD_INSTALL"
+
+      - name: Lint
+        if: env.CMD_LINT != ''
+        run: eval "$CMD_LINT"
+
+      - name: Build
+        if: env.CMD_BUILD != ''
+        run: eval "$CMD_BUILD"
+
+      - name: Test
+        run: eval "$CMD_TEST"
+
+      - name: Upload test & coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-${{ inputs.name }}
+          path: ${{ inputs.path }}/reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  docker:
+    name: docker image
+    needs: build-test # never ship an image whose tests failed
+    if: inputs.docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: inputs.push-image
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ inputs.name }}
+          tags: |
+            type=sha
+            type=ref,event=branch
+            type=ref,event=pr
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ inputs.path }}
+          push: ${{ inputs.push-image }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Per-project cache scope so projects don't evict each other's layers.
+          cache-from: type=gha,scope=${{ inputs.name }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.name }}

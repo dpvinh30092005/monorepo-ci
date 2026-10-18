@@ -1,0 +1,13 @@
+{
+  "name": "api-node",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/server.js",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node src/server.js",
+    "lint": "for f in src/*.js test/*.js; do node --check \"$f\" || exit 1; done",
+    "test": "mkdir -p reports && node --test --experimental-test-coverage --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=reports/junit.xml"
+  }
+}

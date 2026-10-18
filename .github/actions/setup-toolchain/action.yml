@@ -1,0 +1,45 @@
+name: Setup toolchain
+description: Install the language toolchain for one project, with a dependency cache keyed on that project's lockfile.
+
+inputs:
+  type:
+    description: node | python | go | custom
+    required: true
+  version:
+    description: toolchain version; empty uses the project's version file / action default
+    required: false
+    default: ""
+  path:
+    description: project directory (repo-relative)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - if: inputs.type == 'node'
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.version }}
+        cache: npm
+        cache-dependency-path: ${{ inputs.path }}/package-lock.json
+
+    - if: inputs.type == 'python'
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.version }}
+        cache: pip
+        cache-dependency-path: ${{ inputs.path }}/pyproject.toml
+
+    - if: inputs.type == 'go'
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.version }}
+        go-version-file: ${{ inputs.version == '' && format('{0}/go.mod', inputs.path) || '' }}
+        cache-dependency-path: ${{ inputs.path }}/go.mod
+
+    # 'custom' projects bring their own tooling (Makefile, container, ...).
+    - if: ${{ !contains(fromJSON('["node","python","go","custom"]'), inputs.type) }}
+      shell: bash
+      run: |
+        echo "::error::Unsupported project type '${{ inputs.type }}'. Add it here and in ci/ci.py TOOLCHAINS."
+        exit 1

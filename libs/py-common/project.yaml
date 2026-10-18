@@ -1,0 +1,2 @@
+# Shared library. Anything listing it in depends_on is rebuilt when it changes.
+type: python

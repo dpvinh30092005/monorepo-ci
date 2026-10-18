@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Fast local feedback before pushing: lint + test only the projects you touched.
+# Skip once with: git push --no-verify
+set -euo pipefail
+base="$(git merge-base HEAD origin/main 2>/dev/null || true)"
+exec python3 ci/ci.py run --affected --base "${base}" --stages lint,test

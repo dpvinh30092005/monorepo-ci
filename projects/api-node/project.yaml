@@ -1,0 +1,4 @@
+# Only what differs from the "node" defaults in ci/ci.py needs to be here.
+type: node
+version: "22"
+docker: true
